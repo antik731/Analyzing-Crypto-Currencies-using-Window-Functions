@@ -1,0 +1,11 @@
+---
+title: "Analyzing BTC and ETH assignment 3B"
+author: "Antik Salimullah"
+format: 
+  html:
+    embed-resources: true 
+---
+
+## Approach
+
+I will be downloading ETH and BTC hsitorical daily price data from CoinGecko all the way back to 2022. Then I will upload both csv's into Postgre SQL and use SQL window functions to calculate YTD average and six-day moving average for each cryptocurrency.
