@@ -1,0 +1,140 @@
+---
+title: "Using Window Funtions in SQL"
+author: "Antik Salimullah"
+format: 
+  html:
+    embed-resources: true
+---
+
+## Introduction
+
+In this project we are going to analyze crypto, particularly Bitcoin and Ethereum data all the way back to Jan 1st, 2022. I retrieved the data from CoinGecko in csv format, created two separate tables in Postgres using Pgadmin 4 and then manually uploaded both tables separately. After that I combined the tables and used window functions to create ytd_average and six_day_average.
+
+# Connecting to Postgres
+
+```{r}
+library(DBI)
+library(RPostgres)
+
+con <- dbConnect(
+  RPostgres::Postgres(),
+  dbname = "data607",
+  host = "localhost",
+  port = 5432
+)
+```
+
+### SQL - Creating tables
+
+```{sql, connection=con}
+--| eval: false
+CREATE TABLE btc_prices (
+	event_date DATE,
+	close_price NUMERIC,
+	market_cap NUMERIC,
+	volume_usd NUMERIC
+	);
+
+```
+
+```{sql, connection=con}
+--| eval: false
+CREATE TABLE eth_prices (
+	event_date DATE,
+	close_price NUMERIC,
+	market_cap NUMERIC,
+	volume_usd NUMERIC
+);
+```
+
+# Using window functions to combine and find YTD average and six day moving average
+
+```{sql, connection=con}
+WITH crypto_prices AS( 
+	SELECT 
+	event_date,
+	'Bitcoin' AS crypto,
+	close_price
+FROM btc_prices
+WHERE event_date >= '2022-01-01'
+
+UNION ALL
+
+SELECT 
+	event_date,
+	'Ethereum' AS crypto,
+	close_price
+FROM eth_prices
+WHERE event_date >= '2022-01-01'
+
+)
+
+SELECT 
+	event_date,
+	crypto,
+	AVG(close_price) OVER (
+		PARTITION BY crypto, EXTRACT(YEAR FROM event_date)
+		ORDER BY event_date
+		ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+		) AS ytd_average,
+	AVG(close_price) OVER (
+    	PARTITION BY crypto
+    	ORDER BY event_date
+    	ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+		) AS six_day_average
+FROM crypto_prices
+ORDER BY event_date, crypto;
+
+
+```
+
+# Average by Year
+
+```{sql, connection=con}
+WITH crypto_table AS (
+	WITH crypto_prices AS( 
+		SELECT 
+		event_date,
+		'Bitcoin' AS crypto,
+		close_price
+		FROM btc_prices
+		WHERE event_date >= '2022-01-01'
+
+	UNION ALL
+
+	SELECT 
+		event_date,
+		'Ethereum' AS crypto,
+		close_price
+	FROM eth_prices
+	WHERE event_date >= '2022-01-01'
+
+	)
+
+	SELECT 
+		event_date,
+		crypto,
+		AVG(close_price) OVER (
+			PARTITION BY crypto, EXTRACT(YEAR FROM event_date)
+			ORDER BY event_date
+			ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+			) AS ytd_average,
+		AVG(close_price) OVER (
+    		PARTITION BY crypto
+    		ORDER BY event_date
+    		ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+			) AS six_day_average
+	FROM crypto_prices
+	ORDER BY event_date, crypto)
+
+SELECT 
+	crypto,
+	EXTRACT(YEAR FROM event_date) AS year,
+	ytd_average AS yearly_average
+FROM crypto_table
+WHERE event_date IN ('2022-12-31','2023-12-31','2024-12-31','2025-12-31')
+```
+
+# Conclusion 
+
+I used SQL window functions to calculate year-to-date and six-day moving averages for Bitcoin and Ethereum. Bitcoin’s average price increased a lot from 2022 to 2025, while Ethereum also increased overall. This helped show how window functions can summarize time-series data while still keeping the daily rows. I also wanted to use a WITH function within a WITH function to create average price for each year, overly complicated but fun.
